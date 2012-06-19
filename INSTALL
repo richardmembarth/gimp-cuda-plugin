@@ -1,0 +1,57 @@
+INSTALL NOTES
+=============
+
+This plugin was developed and tested on the following platforms:
+- Gentoo Linux 2008.0 (x86_64; Intel(R) Core(TM)2 Duo; GeForce 8400): GIMP 2.4 & 2.6
+- openSUSE 10.2 (x86; Intel(R) Pentium(R) 4; GeForce 8800 GTS): GIMP 2.2
+- Ubuntu 8.04 (x86_64; Intel Q9550; GeForce GTX 280): GIMP 2.6
+- Mac OS X 10.5.6 (i686-apple-darwin9; Intel Core 2 Duo; GeForce 9400M): GIMP 2.6
+
+
+1. Requirements:
+----------------
+Hardware:
+you need a CUDA-enabled GPU:
+http://www.nvidia.com/object/cuda_gpus.html
+
+Software:
+you need the following programs/dev-libs:
+
+CUDA driver, toolkit, and SDK (CUDA 3.0 or above; should also work with CUDA
+versions starting from 2.0):
+http://www.nvidia.com/object/cuda_get.html
+
+gimp2.x: (http://www.gimp.org/) (you may also need the gimp-dev libs on some
+linux distributions in order to get gimptool-2.0)
+
+
+2. Configuration:
+-----------------
+Before building the plugin you may need to adjust at least the following
+variables at the very top of the Makefile depending on your system/linux
+distribution:
+
+CUDA_SDK_PATH   location of the CUDA SDK
+                default: /opt/cuda/sdk
+CUDAROOT        cuda runtime libraries and includes reside
+                default: /opt/cuda
+GIMP_TOOL       path to gimptool, provided by gimp
+                default: /usr/bin/gimptool-2.0
+INSTALL_PATH    installation path of the plugin
+                default: $(HOME)/.gimp-2.6/plug-ins/
+
+The following variables can be adjusted in defines_cpu.hpp:
+MAX_SIGMA_D     the maximal possible geometric spread for the bilateral filter
+MAX_SIGMA_R     the maximal possible photometric spread for the filter
+PRINT_TIMES     when this macro is defined, timings of the filter
+                implementations are printed to stderr
+
+
+3. Install:
+-----------
+make
+make install
+
+Afterwards you'll find in the gimp menu under Filters->Enhance the entry
+"Multiresolution gradient adaptive filter" 
+

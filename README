@@ -1,5 +1,5 @@
-Gimp CUDA Plugin: Multiresolution Gradient Adaptive Filter
-==========================================================
+Gimp Plugin: Multiresolution gradient adaptive filter
+=====================================================
 
 The gimp plugin implements a multiresolution gradient adaptive filter, as
 described in [1], however the filter kernel was replaced by a bilateral filter,
