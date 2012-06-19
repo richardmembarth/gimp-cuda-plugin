@@ -1,0 +1,29 @@
+Gimp CUDA Plugin: Multiresolution Gradient Adaptive Filter
+==========================================================
+
+The gimp plugin implements a multiresolution gradient adaptive filter, as
+described in [1], however the filter kernel was replaced by a bilateral filter,
+as described in [2]. The major advantage of this filter is the fact that the
+filter preserves edges while noise is removed.
+The multiresolution filter consists of 3 major steps (see also doc/mrfilt.eps):
+
+1. Decompose: the gaussian (g0) and laplace (l0) pyramid are constructed
+2. Filter: the bilateral filter (f0) gets applied to the laplace pyramid
+3. Reconstruct: the output image (r0) is reconstructed from the filted data
+
+The multiresolution filter operates on gray-scale images and requires the image
+resolution to be a power of 2. In case that the image doesn't fulfill this
+requirement, the image is padded with mirrored pixel values. The
+multiresolution filter works on 5 stages and the parameters for the bilateral
+filter kernel can be adjusted (see also: INSTALL file).
+
+---
+
+[1] D. Kunz, K. Eck, H. Fillbrandt, and T. Aach. Nonlinear multiresolution
+gradient adaptive filter for medical images. Proceedings of SPIE, 5032:732,
+2003.
+
+[2] C. Tomasi and R. Manduchi. Bilateral ﬁltering for gray and color images.
+Proceedings of the Sixth International Conference on Computer Vision, page
+839, 1998.
+
