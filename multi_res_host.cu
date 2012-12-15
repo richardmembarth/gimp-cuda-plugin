@@ -353,7 +353,6 @@ template <typename T> void run_gpu_intern(guchar *host_g0, guchar *host_r0, cons
     size_t mem_free = 0, mem_total = 0;
     int data_width = 1, data_height = 1;
     int dev, tex_alignment;
-    char *argv[2] = {"1337", "-quiet"};
     cudaDeviceProp device_prop;
     T *channel_g0 = NULL;
     T *g0 = NULL, *l0 = NULL;
@@ -362,7 +361,10 @@ template <typename T> void run_gpu_intern(guchar *host_g0, guchar *host_r0, cons
     T *g3 = NULL, *l3 = NULL;
     T *g4 = NULL, *l4 = NULL;
     T *g5 = NULL, *l5 = NULL;
-    double time, start_time, end_time, total_time;
+    #ifdef PRINT_TIMES
+    double time, start_time, end_time;
+    #endif
+    double total_time;
     float gaussian[2*2*MAX_SIGMA_D+1];
     float gaussian_h[2*2*MAX_SIGMA_D+1][2*2*MAX_SIGMA_D+1];
 
@@ -407,7 +409,9 @@ template <typename T> void run_gpu_intern(guchar *host_g0, guchar *host_r0, cons
         return;
     }
     // allocate && copy device memory
+    #ifdef PRINT_TIMES
     start_time = get_time_ms();
+    #endif
     checkErr(cudaMalloc((void**) &g0, mem_size * 2), "cudaMalloc()");
     channel_g0 = (T *) malloc(data_height*data_width*sizeof(T));
     g1 = &g0[(int)ceil((float)data_width*data_height*sizeof(T) / tex_alignment)*(tex_alignment/sizeof(T))];
@@ -431,7 +435,9 @@ template <typename T> void run_gpu_intern(guchar *host_g0, guchar *host_r0, cons
 
     for (int i=0; i < channels; i++) {
         // pre-process data - copy guchars to new array, mirror pixel values at the margin (get power of 2 for width and height)
+        #ifdef PRINT_TIMES
         start_time = get_time_ms();
+        #endif
         for (int j=0; j<height; j++) {
             for (int k=0; k<width; k++) {
                 channel_g0[j*data_width + k] = host_g0[(width*j + k)*channels + i];
@@ -453,7 +459,9 @@ template <typename T> void run_gpu_intern(guchar *host_g0, guchar *host_r0, cons
         #endif
 
         // copy input data to device
+        #ifdef PRINT_TIMES
         start_time = get_time_ms();
+        #endif
         checkErr(cudaMemcpy(g0, channel_g0, data_width*data_height*sizeof(T), cudaMemcpyHostToDevice), "cudaMemcpy()");
         #ifdef PRINT_TIMES
         end_time = get_time_ms();
@@ -497,7 +505,9 @@ template <typename T> void run_gpu_intern(guchar *host_g0, guchar *host_r0, cons
         total_time += reconstruct(g0, l1, l0, data_width/2, data_height/2);
 
         // get result image
+        #ifdef PRINT_TIMES
         start_time = get_time_ms();
+        #endif
         checkErr(cudaMemcpy(channel_g0, l0, mem_size, cudaMemcpyDeviceToHost), "cudaMemcpy()");
         #ifdef PRINT_TIMES
         end_time = get_time_ms();
@@ -507,7 +517,9 @@ template <typename T> void run_gpu_intern(guchar *host_g0, guchar *host_r0, cons
         #endif
 
         // post process image - we don't need the pixels added by the padding
+        #ifdef PRINT_TIMES
         start_time = get_time_ms();
+        #endif
         for (int j=0; j<height; j++) {
             for (int k=0; k<width; k++) {
                 host_r0[(width*j + k)*channels + i] = (channel_g0[j*data_width + k] < 0)?0:

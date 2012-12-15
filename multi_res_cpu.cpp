@@ -264,15 +264,16 @@ template <typename T> void run_cpu_intern(guchar *host_g0, guchar *host_r0, int 
     T *g3 = NULL, *l3 = NULL;
     T *g4 = NULL, *l4 = NULL;
     T *g5 = NULL, *l5 = NULL;
-    float time, start_time, end_time, total_time;
+    #ifdef PRINT_TIMES
+    double time, start_time, end_time;
+    #endif
+    double total_time;
 
     // get next power of 2 -> padding of image
-    while (data_width < width)
-    {
+    while (data_width < width) {
         data_width = data_width << 1;
     }
-    while (data_height < height)
-    {
+    while (data_height < height) {
         data_height = data_height << 1;
     }
     // calculate overall complexity: 31/16 decompose + 31/16 * filter_radius^2 + 31/16 reconstruct
