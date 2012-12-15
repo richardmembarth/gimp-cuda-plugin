@@ -15,12 +15,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  * Additional permission under GNU GPL version 3 section 7
- *
- * If you modify this Program, or any covered work, by linking or combining it
- * with NVIDIA CUDA Software Development Kit (or a modified version of that
- * library), containing parts covered by the terms of a royalty-free,
- * non-exclusive license, the licensors of this Program grant you additional
- * permission to convey the resulting work.
  */
 
 /* Implementation of multiresolution bilateral filter on the GPU using CUDA
@@ -28,13 +22,12 @@
  */
 
 // includes, system
+#include <math.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <math.h>
 
 // includes, project
-#include <cutil.h>
 #include <libgimp/gimp.h>
 #include <libgimp/gimpui.h>
 
@@ -46,10 +39,57 @@
 
 
 // static variables
-static float progress = 0.0f;
-static float complexity = 0.0f;
+static float progress = 0;
+static float complexity = 0;
 static float num_col = 0;
 static int initialized = 0;
+
+// Macro for error checking
+#if 1
+#define checkErr(err, name) \
+    if (err != cudaSuccess) { \
+        fprintf(stderr,"ERROR: %s (%d): [file %s, line %d]: %s\n", name, err, __FILE__, __LINE__, cudaGetErrorString(err)); \
+        exit(EXIT_FAILURE); \
+    }
+#else
+inline void checkErr(cudaError_t err, const char *name) {
+    if (err != cudaSuccess) {
+        fprintf(stderr,"ERROR: %s (%d): %s\n", name, err, cudaGetErrorString(err));
+        exit(EXIT_FAILURE);
+    }
+}
+#endif
+
+// initialize CUDA and print device name
+void initCUDA() {
+    cudaError_t err = cudaSuccess;
+    int device_count, driver_version = 0, runtime_version = 0; 
+
+    err = cudaGetDeviceCount(&device_count);
+    checkErr(err, "cudaGetDeviceCount()");
+    err = cudaDriverGetVersion(&driver_version);
+    checkErr(err, "cudaDriverGetVersion()");
+    err = cudaRuntimeGetVersion(&runtime_version);
+    checkErr(err, "cudaRuntimeGetVersion()");
+
+    fprintf(stderr, "CUDA Driver/Runtime Version %d.%d/%d.%d\n", driver_version/1000, (driver_version%100)/10, runtime_version/1000, (runtime_version%100)/10);
+
+    for (int i=0; i<device_count; i++) {
+        cudaDeviceProp device_prop;
+
+        err = cudaSetDevice(i);
+        checkErr(err, "cudaSetDevice()");
+        err = cudaGetDeviceProperties(&device_prop, i);
+        checkErr(err, "cudaGetDeviceProperties()");
+    
+        if (i==0) fprintf(stderr, "  [*] ");
+        else fprintf(stderr, "  [ ] ");
+        fprintf(stderr, "Name: %s\n", device_prop.name);
+        fprintf(stderr, "      Compute capability: %d.%d\n", device_prop.major, device_prop.minor);
+    }    
+    err = cudaSetDevice(0);
+    checkErr(err, "cudaSetDevice()");
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 //Update gimp progress bar
@@ -83,30 +123,30 @@ float decompose(int *g0, int *g1, int *l0, int data_width, int data_height) {
         blocksize_y2 = 16;
     }
 
-    CUDA_SAFE_CALL(cudaEventCreate(&start));
-    CUDA_SAFE_CALL(cudaEventCreate(&end));
-    CUDA_SAFE_CALL(cudaEventRecord(start, 0));
+    checkErr(cudaEventCreate(&start), "cudaEventCreate()");
+    checkErr(cudaEventCreate(&end), "cudaEventCreate()");
+    checkErr(cudaEventRecord(start, 0), "cudaEventRecord()");
 
     // reduce
-    CUDA_SAFE_CALL(cudaBindTexture(0, tex_g0, g0, mem_size));
+    checkErr(cudaBindTexture(0, tex_g0, g0, mem_size), "cudaBindTexture()");
     lowpass_ds<<<dim3((int)ceil((float)(data_width/2)/blocksize_x1), (int)ceil((float)(data_height/2)/blocksize_y1), 1),
         dim3 (blocksize_x1, blocksize_y1), 0, 0>>>(g1, data_width, data_height);
     // expand + sub
-    CUDA_SAFE_CALL(cudaBindTexture(0, tex_g0, g0, mem_size));
-    CUDA_SAFE_CALL(cudaBindTexture(0, tex_g1, g1, mem_size/4));
+    checkErr(cudaBindTexture(0, tex_g0, g0, mem_size), "cudaBindTexture()");
+    checkErr(cudaBindTexture(0, tex_g1, g1, mem_size/4), "cudaBindTexture()");
     expand_sub<<<dim3((int)ceil((float)(data_width/2)/blocksize_x2), (int)ceil((float)(data_height/2)/blocksize_y2), 1),
         dim3 (blocksize_x2, blocksize_y2), 0, 0>>>(l0, data_width/2, data_height/2);
 
-    CUDA_SAFE_CALL(cudaEventRecord(end, 0));
-    CUDA_SAFE_CALL(cudaEventSynchronize(end));
-    CUDA_SAFE_CALL(cudaEventElapsedTime(&kernel_time, start, end));
+    checkErr(cudaEventRecord(end, 0), "cudaEventRecord()");
+    checkErr(cudaEventSynchronize(end), "cudaEventSynchronize()");
+    checkErr(cudaEventElapsedTime(&kernel_time, start, end), "cudaEventElapsedTime()");
     update_progress_host(data_height);
-#ifdef PRINT_TIMES
-    fprintf(stderr, "decompose time(%d:%d) GPU: %f (ms)\n", data_width, data_height, kernel_time);
+    #ifdef PRINT_TIMES
+    fprintf(stderr, "decompose time (%dx%d) GPU: %f (ms)\n", data_width, data_height, kernel_time);
     return kernel_time;
-#else
-    return 0.0f;
-#endif
+    #else
+    return 0;
+    #endif
 }
 float decompose(float *g0, float *g1, float *l0, int data_width, int data_height) {
     unsigned int mem_size = data_width * data_height * sizeof(float);
@@ -123,29 +163,29 @@ float decompose(float *g0, float *g1, float *l0, int data_width, int data_height
         blocksize_y2 = 16;
     }
 
-    CUDA_SAFE_CALL(cudaEventCreate(&start));
-    CUDA_SAFE_CALL(cudaEventCreate(&end));
-    CUDA_SAFE_CALL(cudaEventRecord(start, 0));
+    checkErr(cudaEventCreate(&start), "cudaEventCreate()");
+    checkErr(cudaEventCreate(&end), "cudaEventCreate()");
+    checkErr(cudaEventRecord(start, 0), "cudaEventRecord()");
 
     // reduce
-    CUDA_SAFE_CALL(cudaBindTexture(0, tex_g0, g0, mem_size));
+    checkErr(cudaBindTexture(0, tex_g0, g0, mem_size), "cudaBindTexture()");
     lowpass_ds<<<dim3((int)ceil((float)(data_width/2)/blocksize_x1), (int)ceil((float)(data_height/2)/blocksize_y1), 1),
         dim3 (blocksize_x1, blocksize_y1), 0, 0>>>(g1, data_width, data_height);
     // expand + sub
-    CUDA_SAFE_CALL(cudaBindTexture(0, tex_g1, g1, mem_size/4));
+    checkErr(cudaBindTexture(0, tex_g1, g1, mem_size/4), "cudaBindTexture()");
     expand_sub<<<dim3((int)ceil((float)(data_width/2)/blocksize_x2), (int)ceil((float)(data_height/2)/blocksize_y2), 1),
         dim3 (blocksize_x2, blocksize_y2), 0, 0>>>(l0, data_width/2, data_height/2);
 
-    CUDA_SAFE_CALL(cudaEventRecord(end, 0));
-    CUDA_SAFE_CALL(cudaEventSynchronize(end));
-    CUDA_SAFE_CALL(cudaEventElapsedTime(&kernel_time, start, end));
+    checkErr(cudaEventRecord(end, 0), "cudaEventRecord()");
+    checkErr(cudaEventSynchronize(end), "cudaEventSynchronize()");
+    checkErr(cudaEventElapsedTime(&kernel_time, start, end), "cudaEventElapsedTime()");
     update_progress_host(data_height);
-#ifdef PRINT_TIMES
-    fprintf(stderr, "decompose time(%d:%d) GPU: %f (ms)\n", data_width, data_height, kernel_time);
+    #ifdef PRINT_TIMES
+    fprintf(stderr, "decompose time (%dx%d) GPU: %f (ms)\n", data_width, data_height, kernel_time);
     return kernel_time;
-#else
-    return 0.0f;
-#endif
+    #else
+    return 0;
+    #endif
 }
 
 
@@ -165,26 +205,26 @@ float filter(float *f0, float *l0, int data_width, int data_height, int sigma_d,
         blocksize_y = 16;
     }
 
-    CUDA_SAFE_CALL(cudaEventCreate(&start));
-    CUDA_SAFE_CALL(cudaEventCreate(&end));
-    CUDA_SAFE_CALL(cudaEventRecord(start, 0));
+    checkErr(cudaEventCreate(&start), "cudaEventCreate()");
+    checkErr(cudaEventCreate(&end), "cudaEventCreate()");
+    checkErr(cudaEventRecord(start, 0), "cudaEventRecord()");
 
     // filter
-    CUDA_SAFE_CALL(cudaBindTexture(0, tex_l0, l0, mem_size));
+    checkErr(cudaBindTexture(0, tex_l0, l0, mem_size), "cudaBindTexture()");
     bilateral_filter<<<dim3((int)ceil((float)data_width/blocksize_x), 
             (int)ceil((float)data_height/blocksize_y), 1), dim3 (blocksize_x, blocksize_y), 0, 0>>>
         (f0, data_width, data_height, sigma_d, sigma_r);
 
-    CUDA_SAFE_CALL(cudaEventRecord(end, 0));
-    CUDA_SAFE_CALL(cudaEventSynchronize(end));
-    CUDA_SAFE_CALL(cudaEventElapsedTime(&kernel_time, start, end));
+    checkErr(cudaEventRecord(end, 0), "cudaEventRecord()");
+    checkErr(cudaEventSynchronize(end), "cudaEventSynchronize()");
+    checkErr(cudaEventElapsedTime(&kernel_time, start, end), "cudaEventElapsedTime()");
     update_progress_host(data_height*(2*sigma_d*2+1)*(2*sigma_d*2+1));
-#ifdef PRINT_TIMES
-    fprintf(stderr, "filter time(%d:%d) GPU: %f (ms)\n", data_width, data_height, kernel_time);
+    #ifdef PRINT_TIMES
+    fprintf(stderr, "filter time (%dx%d) GPU: %f (ms)\n", data_width, data_height, kernel_time);
     return kernel_time;
-#else
-    return 0.0f;
-#endif
+    #else
+    return 0;
+    #endif
 }
 float filter(int *f0, int *l0, int data_width, int data_height, int sigma_d, int sigma_r) {
     unsigned int mem_size = data_width * data_height * sizeof(int);
@@ -198,26 +238,26 @@ float filter(int *f0, int *l0, int data_width, int data_height, int sigma_d, int
         blocksize_y = 16;
     }
 
-    CUDA_SAFE_CALL(cudaEventCreate(&start));
-    CUDA_SAFE_CALL(cudaEventCreate(&end));
-    CUDA_SAFE_CALL(cudaEventRecord(start, 0));
+    checkErr(cudaEventCreate(&start), "cudaEventCreate()");
+    checkErr(cudaEventCreate(&end), "cudaEventCreate()");
+    checkErr(cudaEventRecord(start, 0), "cudaEventRecord()");
 
     // filter
-    CUDA_SAFE_CALL(cudaBindTexture(0, tex_l0, l0, mem_size));
+    checkErr(cudaBindTexture(0, tex_l0, l0, mem_size), "cudaBindTexture()");
     bilateral_filter<<<dim3((int)ceil((float)data_width/blocksize_x), 
             (int)ceil((float)data_height/blocksize_y), 1), dim3 (blocksize_x, blocksize_y), 0, 0>>>
         (f0, data_width, data_height, sigma_d, sigma_r);
 
-    CUDA_SAFE_CALL(cudaEventRecord(end, 0));
-    CUDA_SAFE_CALL(cudaEventSynchronize(end));
-    CUDA_SAFE_CALL(cudaEventElapsedTime(&kernel_time, start, end));
+    checkErr(cudaEventRecord(end, 0), "cudaEventRecord()");
+    checkErr(cudaEventSynchronize(end), "cudaEventSynchronize()");
+    checkErr(cudaEventElapsedTime(&kernel_time, start, end), "cudaEventElapsedTime()");
     update_progress_host(data_height*(2*sigma_d*2+1)*(2*sigma_d*2+1));
-#ifdef PRINT_TIMES
-    fprintf(stderr, "filter time(%d:%d) GPU: %f (ms)\n", data_width, data_height, kernel_time);
+    #ifdef PRINT_TIMES
+    fprintf(stderr, "filter time (%dx%d) GPU: %f (ms)\n", data_width, data_height, kernel_time);
     return kernel_time;
-#else
-    return 0.0f;
-#endif
+    #else
+    return 0;
+    #endif
 }
 
 
@@ -237,26 +277,26 @@ float reconstruct(float *f0, float *r1, float *r0, int data_width, int data_heig
         blocksize_y = 16;
     }
 
-    CUDA_SAFE_CALL(cudaEventCreate(&start));
-    CUDA_SAFE_CALL(cudaEventCreate(&end));
-    CUDA_SAFE_CALL(cudaEventRecord(start, 0));
+    checkErr(cudaEventCreate(&start), "cudaEventCreate()");
+    checkErr(cudaEventCreate(&end), "cudaEventCreate()");
+    checkErr(cudaEventRecord(start, 0), "cudaEventRecord()");
 
     // reconstruct
-    CUDA_SAFE_CALL(cudaBindTexture(0, tex_f0, f0, mem_size*4));
-    CUDA_SAFE_CALL(cudaBindTexture(0, tex_r1, r1, mem_size));
+    checkErr(cudaBindTexture(0, tex_f0, f0, mem_size*4), "cudaBindTexture()");
+    checkErr(cudaBindTexture(0, tex_r1, r1, mem_size), "cudaBindTexture()");
     reconstruct<<<dim3((int)ceil((float)data_width/blocksize_x), (int)ceil((float)data_height/blocksize_y), 1),
         dim3(blocksize_x, blocksize_y), 0, 0>>>(r0, data_width, data_height);
 
-    CUDA_SAFE_CALL(cudaEventRecord(end, 0));
-    CUDA_SAFE_CALL(cudaEventSynchronize(end));
-    CUDA_SAFE_CALL(cudaEventElapsedTime(&kernel_time, start, end));
+    checkErr(cudaEventRecord(end, 0), "cudaEventRecord()");
+    checkErr(cudaEventSynchronize(end), "cudaEventSynchronize()");
+    checkErr(cudaEventElapsedTime(&kernel_time, start, end), "cudaEventElapsedTime()");
     update_progress_host(data_height);
-#ifdef PRINT_TIMES
-    fprintf(stderr, "reconstruct time(%d:%d) GPU: %f (ms)\n", data_width, data_height, kernel_time);
+    #ifdef PRINT_TIMES
+    fprintf(stderr, "reconstruct time (%dx%d) GPU: %f (ms)\n", data_width, data_height, kernel_time);
     return kernel_time;
-#else
-    return 0.0f;
-#endif
+    #else
+    return 0;
+    #endif
 }
 float reconstruct(int *f0, int *r1, int *r0, int data_width, int data_height) {
     unsigned int mem_size = data_width * data_height * sizeof(int);
@@ -270,26 +310,26 @@ float reconstruct(int *f0, int *r1, int *r0, int data_width, int data_height) {
         blocksize_y = 16;
     }
 
-    CUDA_SAFE_CALL(cudaEventCreate(&start));
-    CUDA_SAFE_CALL(cudaEventCreate(&end));
-    CUDA_SAFE_CALL(cudaEventRecord(start, 0));
+    checkErr(cudaEventCreate(&start), "cudaEventCreate()");
+    checkErr(cudaEventCreate(&end), "cudaEventCreate()");
+    checkErr(cudaEventRecord(start, 0), "cudaEventRecord()");
 
     // reconstruct
-    CUDA_SAFE_CALL(cudaBindTexture(0, tex_f0, f0, mem_size*4));
-    CUDA_SAFE_CALL(cudaBindTexture(0, tex_r1, r1, mem_size));
+    checkErr(cudaBindTexture(0, tex_f0, f0, mem_size*4), "cudaBindTexture()");
+    checkErr(cudaBindTexture(0, tex_r1, r1, mem_size), "cudaBindTexture()");
     reconstruct<<<dim3((int)ceil((float)data_width/blocksize_x), (int)ceil((float)data_height/blocksize_y), 1),
         dim3(blocksize_x, blocksize_y), 0, 0>>>(r0, data_width, data_height);
 
-    CUDA_SAFE_CALL(cudaEventRecord(end, 0));
-    CUDA_SAFE_CALL(cudaEventSynchronize(end));
-    CUDA_SAFE_CALL(cudaEventElapsedTime(&kernel_time, start, end));
+    checkErr(cudaEventRecord(end, 0), "cudaEventRecord()");
+    checkErr(cudaEventSynchronize(end), "cudaEventSynchronize()");
+    checkErr(cudaEventElapsedTime(&kernel_time, start, end), "cudaEventElapsedTime()");
     update_progress_host(data_height);
-#ifdef PRINT_TIMES
-    fprintf(stderr, "reconstruct time(%d:%d) GPU: %f (ms)\n", data_width, data_height, kernel_time);
+    #ifdef PRINT_TIMES
+    fprintf(stderr, "reconstruct time (%dx%d) GPU: %f (ms)\n", data_width, data_height, kernel_time);
     return kernel_time;
-#else
-    return 0.0f;
-#endif
+    #else
+    return 0;
+    #endif
 }
 
 
@@ -299,7 +339,7 @@ float reconstruct(int *f0, int *r1, int *r0, int data_width, int data_height) {
 int has_cuda_device(void) {
     int device_count;
 
-    CUDA_SAFE_CALL(cudaGetDeviceCount(&device_count));
+    checkErr(cudaGetDeviceCount(&device_count), "cudaGetDeviceCount()");
 
     return device_count;
 }
@@ -309,7 +349,7 @@ int has_cuda_device(void) {
 //! Run the multiresolution filter on the GPU
 ////////////////////////////////////////////////////////////////////////////////
 template <typename T> void run_gpu_intern(guchar *host_g0, guchar *host_r0, const int width, const int height, const int channels, const int sigma_d, const int sigma_r) {
-    unsigned int timer = 0, mem_size;
+    unsigned int mem_size;
     size_t mem_free = 0, mem_total = 0;
     int data_width = 1, data_height = 1;
     int dev, tex_alignment;
@@ -322,18 +362,18 @@ template <typename T> void run_gpu_intern(guchar *host_g0, guchar *host_r0, cons
     T *g3 = NULL, *l3 = NULL;
     T *g4 = NULL, *l4 = NULL;
     T *g5 = NULL, *l5 = NULL;
-    float time;
+    double time, start_time, end_time, total_time;
     float gaussian[2*2*MAX_SIGMA_D+1];
     float gaussian_h[2*2*MAX_SIGMA_D+1][2*2*MAX_SIGMA_D+1];
 
-    // initialize device and timer
+    // initialize device
     if (!initialized) {
-        CUT_DEVICE_INIT(2, argv);
+        initCUDA();
         initialized++;
     }
     // get texture alignment
-    CUDA_SAFE_CALL(cudaGetDevice(&dev));
-    CUDA_SAFE_CALL(cudaGetDeviceProperties(&device_prop, dev));
+    checkErr(cudaGetDevice(&dev), "cudaGetDevice()");
+    checkErr(cudaGetDeviceProperties(&device_prop, dev), "cudaGetDeviceProperties()");
     tex_alignment = device_prop.textureAlignment;
 
 
@@ -348,7 +388,7 @@ template <typename T> void run_gpu_intern(guchar *host_g0, guchar *host_r0, cons
     // calculate overall complexity: 31/16 decompose + 31/16 * filter_radius^2 + 31/16 reconstruct
     // norm to lines per 1percent
     complexity = ((31 + 31*(2*sigma_d*2+1)*(2*sigma_d*2+1) + 31)*channels*data_height)/(16*100);
-    progress = 0.0f;
+    progress = 0;
     num_col = 0;
     mem_size = sizeof(T) * data_width * data_height;
     // compute gaussian spread matrix for domain space
@@ -358,39 +398,40 @@ template <typename T> void run_gpu_intern(guchar *host_g0, guchar *host_r0, cons
             gaussian_h[xf+2*sigma_d][yf+2*sigma_d] = gaussian[xf+2*sigma_d] * gaussian[yf+2*sigma_d];
         }
     }
-    CUDA_SAFE_CALL(cudaMemcpyToSymbol(gaussian_d, gaussian_h, (2*2*MAX_SIGMA_D+1)*(2*2*MAX_SIGMA_D+1)*sizeof(float)));
+    checkErr(cudaMemcpyToSymbol(gaussian_d, gaussian_h, (2*2*MAX_SIGMA_D+1)*(2*2*MAX_SIGMA_D+1)*sizeof(float)), "cudaMemcpyToSymbol()");
 
     // check if enough memory is available
-    CUDA_SAFE_CALL(cudaMemGetInfo(&mem_free, &mem_total));
+    checkErr(cudaMemGetInfo(&mem_free, &mem_total), "cudaMemGetInfo()");
     if (mem_free < 4*mem_size) {
         g_message("Not enough memory on GPU:\n %d bytes free\n%d bytes required!", (int)mem_free, (int)mem_total);
         return;
     }
     // allocate && copy device memory
-    CUT_SAFE_CALL(cutCreateTimer(&timer));
-    CUT_SAFE_CALL(cutStartTimer(timer));
-    CUDA_SAFE_CALL(cudaMalloc((void**) &g0, mem_size * 2));
+    start_time = get_time_ms();
+    checkErr(cudaMalloc((void**) &g0, mem_size * 2), "cudaMalloc()");
     channel_g0 = (T *) malloc(data_height*data_width*sizeof(T));
     g1 = &g0[(int)ceil((float)data_width*data_height*sizeof(T) / tex_alignment)*(tex_alignment/sizeof(T))];
     g2 = &g1[(int)ceil((float)data_width*(data_height/2)*sizeof(T) / tex_alignment)*(tex_alignment/sizeof(T))];
     g3 = &g2[(int)ceil((float)data_width*(data_height/4)*sizeof(T) / tex_alignment)*(tex_alignment/sizeof(T))];
     g4 = &g3[(int)ceil((float)data_width*(data_height/8)*sizeof(T) / tex_alignment)*(tex_alignment/sizeof(T))];
     g5 = &g4[(int)ceil((float)data_width*(data_height/16)*sizeof(T) / tex_alignment)*(tex_alignment/sizeof(T))];
-    CUDA_SAFE_CALL(cudaMalloc((void**) &l0, mem_size * 2));
+    checkErr(cudaMalloc((void**) &l0, mem_size * 2), "cudaMalloc()");
     l1 = &l0[(int)ceil((float)data_width*data_height*sizeof(T) / tex_alignment)*(tex_alignment/sizeof(T))];
     l2 = &l1[(int)ceil((float)data_width*(data_height/2)*sizeof(T) / tex_alignment)*(tex_alignment/sizeof(T))];
     l3 = &l2[(int)ceil((float)data_width*(data_height/4)*sizeof(T) / tex_alignment)*(tex_alignment/sizeof(T))];
     l4 = &l3[(int)ceil((float)data_width*(data_height/8)*sizeof(T) / tex_alignment)*(tex_alignment/sizeof(T))];
     l5 = &l4[(int)ceil((float)data_width*(data_height/16)*sizeof(T) / tex_alignment)*(tex_alignment/sizeof(T))];
-#ifdef PRINT_TIMES
+    #ifdef PRINT_TIMES
     fprintf(stderr, "\n#################################################################################\n");
-    time = cutGetTimerValue(timer);
+    end_time = get_time_ms();
+    time = end_time - start_time;
+    total_time = time;
     fprintf(stderr, "Memory allocation time (GPU): %f (ms)\n", time);
-#endif
+    #endif
 
     for (int i=0; i < channels; i++) {
         // pre-process data - copy guchars to new array, mirror pixel values at the margin (get power of 2 for width and height)
-        CUT_SAFE_CALL(cutResetTimer(timer));
+        start_time = get_time_ms();
         for (int j=0; j<height; j++) {
             for (int k=0; k<width; k++) {
                 channel_g0[j*data_width + k] = host_g0[(width*j + k)*channels + i];
@@ -404,82 +445,90 @@ template <typename T> void run_gpu_intern(guchar *host_g0, guchar *host_r0, cons
                 channel_g0[j*data_width + k] = channel_g0[(height-2-(j-height))*data_width + k];
             }
         }
-#ifdef PRINT_TIMES
-        fprintf(stderr, "Data pre-processing time: %f (ms)\n", cutGetTimerValue(timer));
-#endif
+        #ifdef PRINT_TIMES
+        end_time = get_time_ms();
+        time = end_time - start_time;
+        total_time += time;
+        fprintf(stderr, "Data pre-processing time: %f (ms)\n", time);
+        #endif
 
         // copy input data to device
-        CUT_SAFE_CALL(cutResetTimer(timer));
-        CUDA_SAFE_CALL(cudaMemcpy(g0, channel_g0, data_width*data_height*sizeof(T), cudaMemcpyHostToDevice));
-#ifdef PRINT_TIMES
-        time += cutGetTimerValue(timer);
-        fprintf(stderr, "Memory copy time host->device: %f (ms)\n", cutGetTimerValue(timer));
-#endif
+        start_time = get_time_ms();
+        checkErr(cudaMemcpy(g0, channel_g0, data_width*data_height*sizeof(T), cudaMemcpyHostToDevice), "cudaMemcpy()");
+        #ifdef PRINT_TIMES
+        end_time = get_time_ms();
+        time = end_time - start_time;
+        total_time += time;
+        fprintf(stderr, "Memory copy time host->device: %f (ms)\n", time);
+        #endif
 
 
         // decompose image - the smallest resolution we get from gimp is 200x200 (256x256 padded)
         // for 256x256 we use one stage less - the lowest stage would have be 8x8
-        time += decompose(g0, g1, l0, data_width, data_height);
-        time += decompose(g1, g2, l1, data_width/2, data_height/2);
-        time += decompose(g2, g3, l2, data_width/4, data_height/4);
+        total_time += decompose(g0, g1, l0, data_width, data_height);
+        total_time += decompose(g1, g2, l1, data_width/2, data_height/2);
+        total_time += decompose(g2, g3, l2, data_width/4, data_height/4);
         if (data_width > 256) {
-            time += decompose(g3, g4, l3, data_width/8, data_height/8);
-            time += decompose(g4, l5, l4, data_width/16, data_height/16);
+            total_time += decompose(g3, g4, l3, data_width/8, data_height/8);
+            total_time += decompose(g4, l5, l4, data_width/16, data_height/16);
         } else {
-            time += decompose(g3, l4, l3, data_width/8, data_height/8);
+            total_time += decompose(g3, l4, l3, data_width/8, data_height/8);
         }
 
         // filter image - reuse g0 for f0
-        time += filter(g0, l0, data_width, data_height, sigma_d, sigma_r);
-        time += filter(g1, l1, data_width/2, data_height/2, sigma_d, sigma_r);
-        time += filter(g2, l2, data_width/4, data_height/4, sigma_d, sigma_r);
-        time += filter(g3, l3, data_width/8, data_height/8, sigma_d, sigma_r);
-        time += filter(g4, l4, data_width/16, data_height/16, sigma_d, sigma_r);
+        total_time += filter(g0, l0, data_width, data_height, sigma_d, sigma_r);
+        total_time += filter(g1, l1, data_width/2, data_height/2, sigma_d, sigma_r);
+        total_time += filter(g2, l2, data_width/4, data_height/4, sigma_d, sigma_r);
+        total_time += filter(g3, l3, data_width/8, data_height/8, sigma_d, sigma_r);
+        total_time += filter(g4, l4, data_width/16, data_height/16, sigma_d, sigma_r);
         if (data_width > 256) {
-            time += filter(g5, l5, data_width/32, data_height/32, sigma_d, sigma_r);
+            total_time += filter(g5, l5, data_width/32, data_height/32, sigma_d, sigma_r);
         }
 
         // reconstruct image - reuse l0 for r0
         if (data_width > 256) {
-            time += reconstruct(g4, g5, l4, data_width/32, data_height/32);
-            time += reconstruct(g3, l4, l3, data_width/16, data_height/16);
+            total_time += reconstruct(g4, g5, l4, data_width/32, data_height/32);
+            total_time += reconstruct(g3, l4, l3, data_width/16, data_height/16);
         } else {
-            time += reconstruct(g3, g4, l3, data_width/16, data_height/16);
+            total_time += reconstruct(g3, g4, l3, data_width/16, data_height/16);
         }
-        time += reconstruct(g2, l3, l2, data_width/8, data_height/8);
-        time += reconstruct(g1, l2, l1, data_width/4, data_height/4);
-        time += reconstruct(g0, l1, l0, data_width/2, data_height/2);
+        total_time += reconstruct(g2, l3, l2, data_width/8, data_height/8);
+        total_time += reconstruct(g1, l2, l1, data_width/4, data_height/4);
+        total_time += reconstruct(g0, l1, l0, data_width/2, data_height/2);
 
         // get result image
-        CUT_SAFE_CALL(cutResetTimer(timer));
-        CUDA_SAFE_CALL(cudaMemcpy(channel_g0, l0, mem_size, cudaMemcpyDeviceToHost));
-#ifdef PRINT_TIMES
-        time += cutGetTimerValue(timer);
-        fprintf(stderr, "Memory copy time device->host: %f (ms)\n", cutGetTimerValue(timer));
-#endif
+        start_time = get_time_ms();
+        checkErr(cudaMemcpy(channel_g0, l0, mem_size, cudaMemcpyDeviceToHost), "cudaMemcpy()");
+        #ifdef PRINT_TIMES
+        end_time = get_time_ms();
+        time = end_time - start_time;
+        total_time += time;
+        fprintf(stderr, "Memory copy time device->host: %f (ms)\n", time);
+        #endif
 
         // post process image - we don't need the pixels added by the padding
-        CUT_SAFE_CALL(cutResetTimer(timer));
+        start_time = get_time_ms();
         for (int j=0; j<height; j++) {
             for (int k=0; k<width; k++) {
                 host_r0[(width*j + k)*channels + i] = (channel_g0[j*data_width + k] < 0)?0:
                     (channel_g0[j*data_width + k]>255)?255:(guchar)channel_g0[j*data_width + k];
             }
         }
-#ifdef PRINT_TIMES
-        time += cutGetTimerValue(timer);
-        fprintf(stderr, "Data post-processing time: %f (ms)\n", cutGetTimerValue(timer));
-#endif
+        #ifdef PRINT_TIMES
+        end_time = get_time_ms();
+        time = end_time - start_time;
+        total_time += time;
+        fprintf(stderr, "Data post-processing time: %f (ms)\n", time);
+        #endif
     }
-#ifdef PRINT_TIMES
-        fprintf(stderr, "Total time: %f (ms)\n", time);
-        fprintf(stderr, "#################################################################################\n\n");
-#endif
+    #ifdef PRINT_TIMES
+    fprintf(stderr, "Total time: %f (ms)\n", total_time);
+    fprintf(stderr, "#################################################################################\n\n");
+    #endif
 
     // cleanup memory
-    CUT_SAFE_CALL(cutDeleteTimer(timer));
-    CUDA_SAFE_CALL(cudaFree(g0));
-    CUDA_SAFE_CALL(cudaFree(l0));
+    checkErr(cudaFree(g0), "cudaFree()");
+    checkErr(cudaFree(l0), "cudaFree()");
 }
 
 

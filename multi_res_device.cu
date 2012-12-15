@@ -15,12 +15,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  * Additional permission under GNU GPL version 3 section 7
- *
- * If you modify this Program, or any covered work, by linking or combining it
- * with NVIDIA CUDA Software Development Kit (or a modified version of that
- * library), containing parts covered by the terms of a royalty-free,
- * non-exclusive license, the licensors of this Program grant you additional
- * permission to convey the resulting work.
  */
 
 /* Implementation of lowpass filter on the GPU using CUDA
@@ -31,7 +25,6 @@
 #ifndef __MULTI_RES_DEVICE_CU__
 #define __MULTI_RES_DEVICE_CU__
 
-#include <cutil.h>
 #include <stdio.h>
 #include "defines_gpu.hpp"
 
@@ -238,7 +231,7 @@ __global__ void bilateral_filter(float *dev_odata, int data_width, int data_heig
     const int iy = blockDim.y * blockIdx.y + threadIdx.y;
     int x_corr, y_corr;
     float c_r = 1.0f/(2.0f*sigma_r*sigma_r); 
-    float s = 0.0f, d = 0.0f, p = 0.0f;
+    float s = 0, d = 0, p = 0;
     float diff;
 
     if (ix < data_width && iy < data_height) {
@@ -274,7 +267,7 @@ __global__ void bilateral_filter(int *dev_odata, int data_width, int data_height
     const int iy = blockDim.y * blockIdx.y + threadIdx.y;
     int x_corr, y_corr;
     float c_r = 1.0f/(2.0f*sigma_r*sigma_r); 
-    float s = 0.0f, d = 0.0f, p = 0.0f;
+    float s = 0, d = 0, p = 0;
     float diff;
 
     if (ix < data_width && iy < data_height) {
