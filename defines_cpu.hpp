@@ -26,7 +26,7 @@
 #define MAX_SIGMA_R 25
 
 // define PRINT_TIMES in order to print the times of each filter component on stderr
-#define PRINT_TIMES
+//#define PRINT_TIMES
 
 #endif /* __DEFINES_CPU_HPP__ */
 
