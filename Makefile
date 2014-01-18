@@ -3,7 +3,7 @@
 #
 
 # This is where the CUDA runtime libraries and includes reside
-CUDAROOT  := /opt/cuda
+CUDAROOT  := /usr/local/cuda
 
 # Set variables depending on platform
 ifeq (Darwin,$(shell uname -s))
@@ -11,6 +11,7 @@ ifeq (Darwin,$(shell uname -s))
     CUDA_LIB_EXT    = lib
     # Location of the gimp plugin directory
     INSTALL_PATH    = $(HOME)/Library/GIMP/2.8/plug-ins
+    CUFLAGS        += -ccbin `which clang` -Xcompiler -arch -Xcompiler x86_64 -Xcompiler -stdlib=libstdc++
 else
     CUDA_LIB_EXT    = lib64
     # Location of the gimp plugin directory
