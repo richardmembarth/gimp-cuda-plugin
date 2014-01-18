@@ -267,7 +267,7 @@ template <typename T> void run_cpu_intern(guchar *host_g0, guchar *host_r0, int 
     #ifdef PRINT_TIMES
     double time, start_time, end_time;
     #endif
-    double total_time;
+    double total_time = 0;
 
     // get next power of 2 -> padding of image
     while (data_width < width) {
