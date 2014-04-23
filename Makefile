@@ -10,7 +10,7 @@ ifeq (Darwin,$(shell uname -s))
     BIT             = -m64
     CUDA_LIB_EXT    = lib
     # Location of the gimp plugin directory
-    INSTALL_PATH    = $(HOME)/Library/GIMP/2.8/plug-ins
+    INSTALL_PATH    = $(HOME)/Library/Application\ Support/GIMP/2.8/plug-ins
     CUFLAGS        += -ccbin `which clang` -Xcompiler -arch -Xcompiler x86_64 -Xcompiler -stdlib=libstdc++
 else
     CUDA_LIB_EXT    = lib64
