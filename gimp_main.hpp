@@ -22,8 +22,7 @@
 
 #include <sys/time.h>
 
-typedef struct
-{
+typedef struct {
   gint sigma_d;
   gint sigma_r;
   gboolean preview;
@@ -33,7 +32,7 @@ typedef struct
 
 extern filter_config filter_vals;
 
-extern void run_multi_filter (GimpDrawable *drawable, GimpPreview *preview);
+extern void run_multi_filter(GimpDrawable *drawable, GimpPreview *preview);
 
 // get time in milliseconds
 inline double get_time_ms() {

@@ -20,7 +20,7 @@
 #ifndef __GIMP_GUI_HPP__
 #define __GIMP_GUI_HPP__
 
-extern gboolean multi_res_dialog (GimpDrawable *drawable);
+extern gboolean multi_res_dialog(GimpDrawable *drawable);
 
 #endif /* __GIMP_GUI_HPP__ */
 

@@ -35,8 +35,7 @@ static void run         (const gchar      *name,
 void run_multi_filter(GimpDrawable *drawable, GimpPreview  *preview);
 
 /* Set up default values for options */
-filter_config filter_vals =
-{
+filter_config filter_vals = {
     3,  /* geometric spread */
     3,  /* photometric spread */
     1,  /* preview */
@@ -44,8 +43,7 @@ filter_config filter_vals =
     0   /* use float */
 };
 
-GimpPlugInInfo PLUG_IN_INFO =
-{
+GimpPlugInInfo PLUG_IN_INFO = {
     NULL,
     NULL,
     query,
@@ -54,9 +52,8 @@ GimpPlugInInfo PLUG_IN_INFO =
 
 MAIN()
 
-static void query (void) {
-    static GimpParamDef args[] =
-    {
+static void query(void) {
+    static GimpParamDef args[] = {
         {
             GIMP_PDB_INT32,
             (gchar *) "run-mode",
@@ -93,7 +90,7 @@ static void query (void) {
             (gchar *) "Use floats for higher accuracy"
         }
     };
-    
+
     gimp_install_procedure(
         "plug-in-multi-res-filter",
         "Multiresolution gradient adaptive filter (nonlinear) with bilateral kernel filter...",
@@ -106,41 +103,41 @@ static void query (void) {
         GIMP_PLUGIN,
         G_N_ELEMENTS(args), 0,
         args, NULL);
-    
+
     gimp_plugin_menu_register("plug-in-multi-res-filter", "<Image>/Filters/Enhance");
 }
-    
 
-static void run (const gchar *name, gint nparams, const GimpParam *param, gint *nreturn_vals, GimpParam **return_vals) {
+
+static void run(const gchar *name, gint nparams, const GimpParam *param, gint *nreturn_vals, GimpParam **return_vals) {
     static GimpParam  values[1];
     GimpPDBStatusType status = GIMP_PDB_SUCCESS;
     GimpRunMode       run_mode;
     GimpDrawable     *drawable;
-    
+
     /* Setting mandatory output values */
     *nreturn_vals = 1;
     *return_vals  = values;
-    
+
     values[0].type = GIMP_PDB_STATUS;
     values[0].data.d_status = status;
-    
-    /* Getting run_mode - we won't display a dialog if 
+
+    /* Getting run_mode - we won't display a dialog if
      * we are in NONINTERACTIVE mode */
     run_mode = (GimpRunMode) param[0].data.d_int32;
-    
+
     /*  Get the specified drawable  */
     drawable = gimp_drawable_get(param[2].data.d_drawable);
-    
+
     switch (run_mode) {
         case GIMP_RUN_INTERACTIVE:
             /* Get options last values if needed */
             gimp_get_data("plug-in-multi-res-filter", &filter_vals);
-            
+
             /* Display the dialog */
             if (!multi_res_dialog(drawable))
                 return;
             break;
-        
+
         case GIMP_RUN_NONINTERACTIVE:
             fprintf(stderr, "noninteractive\n");
             if (nparams != 6)
@@ -152,38 +149,38 @@ static void run (const gchar *name, gint nparams, const GimpParam *param, gint *
                 filter_vals.use_float = param[6].data.d_int32;
                 if (filter_vals.gpu) filter_vals.gpu = has_cuda_device();
             break;
-        
+
         case GIMP_RUN_WITH_LAST_VALS:
             /*  Get options last values if needed  */
             gimp_get_data("plug-in-multi-res-filter", &filter_vals);
             break;
-        
+
         default:
             break;
     }
-    
+
     run_multi_filter(drawable, NULL);
-    
+
     gimp_displays_flush();
     gimp_drawable_detach(drawable);
-    
+
     /*  Finally, set options in the core  */
     if (run_mode == GIMP_RUN_INTERACTIVE)
       gimp_set_data("plug-in-multi-res-filter", &filter_vals, sizeof(filter_config));
-    
+
     return;
 }
-    
 
-void run_multi_filter(GimpDrawable *drawable, GimpPreview  *preview) {
+
+void run_multi_filter(GimpDrawable *drawable, GimpPreview *preview) {
     gint         x1, y1, x2, y2;
     GimpPixelRgn rgn_in, rgn_out;
     guchar       *g0;
     gint         width, height, channels;
-    
+
     if (!preview)
         gimp_progress_init("Multiresolution filter...");
-    
+
     /* Gets upper left and lower right coordinates,
      * and layers number in the image */
     if (preview) {
@@ -196,9 +193,9 @@ void run_multi_filter(GimpDrawable *drawable, GimpPreview  *preview) {
         width = x2 - x1;
         height = y2 - y1;
     }
-    
+
     channels = gimp_drawable_bpp(drawable->drawable_id);
-    
+
     /* Initializes two PixelRgns, one to read original data,
      * and the other to write output data. That second one will
      * be merged at the end by the call to
@@ -213,10 +210,10 @@ void run_multi_filter(GimpDrawable *drawable, GimpPreview  *preview) {
                          x1, y1,
                          width, height,
                          preview == NULL, TRUE);
-    
+
     /* Allocate memory for input and output image */
     g0 = g_new(guchar, width*height*channels);
-    
+
     gimp_pixel_rgn_get_rect(&rgn_in, g0, x1, y1, width, height);
 
     /* Call GPU or CPU implementation */
@@ -225,10 +222,10 @@ void run_multi_filter(GimpDrawable *drawable, GimpPreview  *preview) {
     } else {
         run_cpu(g0, g0, width, height, channels, filter_vals.sigma_d, filter_vals.sigma_r, filter_vals.use_float);
     }
-    
+
     gimp_pixel_rgn_set_rect(&rgn_out, g0, x1, y1, width, height);
     g_free(g0);
-    
+
     /*  Update the modified region */
     if (preview) {
         gimp_drawable_preview_draw_region(GIMP_DRAWABLE_PREVIEW(preview), &rgn_out);
