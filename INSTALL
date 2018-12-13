@@ -9,12 +9,12 @@ This plugin was developed and tested on the following platforms:
 1. Requirements:
 ----------------
 Hardware:
-you need a CUDA-enabled GPU: http://www.nvidia.com/object/cuda_gpus.html
+you need a CUDA-enabled GPU: https://developer.nvidia.com/cuda-gpus
 
 Software:
 you need the following programs/dev-libs:
 
-- CUDA driver and toolkit: http://www.nvidia.com/object/cuda_get.html
+- CUDA driver and toolkit: https://developer.nvidia.com/cuda-gpus
 
 - gimp2.x: (http://www.gimp.org) (you may also need the gimp-dev(el) libs on
   some GNU/Linux distributions in order to get gimptool-2.0)
