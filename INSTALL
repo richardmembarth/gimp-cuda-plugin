@@ -2,8 +2,8 @@ INSTALL NOTES
 =============
 
 This plugin was developed and tested on the following platforms:
-- GNU/Linux & GIMP 2.8
-- Mac OS X  & GIMP 2.8
+- GNU/Linux & GIMP 2.8, 2.10
+- Mac OS X  & GIMP 2.8, 2.10
 
 
 1. Requirements:

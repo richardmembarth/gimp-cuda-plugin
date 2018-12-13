@@ -1,23 +1,31 @@
-cmake_minimum_required(VERSION 2.10)
+cmake_minimum_required(VERSION 3.4.3)
 project(gimp-cuda-plugin)
 
 find_package(CUDA REQUIRED)
 find_package(PkgConfig REQUIRED)
 
+pkg_check_modules(GIMPUI gimpui-2.0 REQUIRED)
+string(REPLACE "." ";" VERSION_LIST ${GIMPUI_VERSION})
+list(GET VERSION_LIST 0 GIMPUI_VERSION_MAJOR)
+list(GET VERSION_LIST 1 GIMPUI_VERSION_MINOR)
+list(GET VERSION_LIST 2 GIMPUI_VERSION_PATCH)
+set(GIMPUI_VERSION_MAJOR_MINOR ${GIMPUI_VERSION_MAJOR}.${GIMPUI_VERSION_MINOR})
+
 set(CMAKE_BUILD_TYPE Release CACHE PATH "default build type" FORCE)
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
     if(APPLE)
-        set(CMAKE_INSTALL_PREFIX "$ENV{HOME}/Library/Application\ Support/GIMP/2.8/plug-ins"
-            CACHE PATH "default plugin installation path" FORCE)
+        set(DEFAULT_PREFIX "$ENV{HOME}/Library/Application\ Support/GIMP/${GIMPUI_VERSION_MAJOR_MINOR}/plug-ins")
     else()
-        set(CMAKE_INSTALL_PREFIX "$ENV{HOME}/.gimp-2.8/plug-ins"
-            CACHE PATH "default plugin installation path" FORCE)
+        if(${GIMPUI_VERSION} VERSION_LESS 2.10)
+            set(DEFAULT_PREFIX "$ENV{HOME}/.gimp-${GIMPUI_VERSION_MAJOR_MINOR}/plug-ins")
+        else()
+            set(DEFAULT_PREFIX "$ENV{HOME}/.config/GIMP/${GIMPUI_VERSION_MAJOR_MINOR}/plug-ins")
+        endif()
     endif()
+    set(CMAKE_INSTALL_PREFIX ${DEFAULT_PREFIX} CACHE PATH "default plugin installation path" FORCE)
 endif()
 
-pkg_check_modules(GIMPUI gimpui-2.0 REQUIRED)
-include_directories(${GIMPUI_INCLUDE_DIRS})
-
+include_directories(SYSTEM ${GIMPUI_INCLUDE_DIRS})
 cuda_add_executable(multi_res_filter multi_res_host.cu gimp_gui.cpp gimp_main.cpp multi_res_cpu.cpp)
 target_link_libraries(multi_res_filter ${GIMPUI_LIBRARIES})
 
