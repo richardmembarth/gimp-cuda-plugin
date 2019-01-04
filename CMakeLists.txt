@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.4.3)
-project(gimp-cuda-plugin)
+project(gimp-cuda-plugin LANGUAGES CXX CUDA)
 
 find_package(CUDA REQUIRED)
 find_package(PkgConfig REQUIRED)
@@ -25,8 +25,8 @@ if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
     set(CMAKE_INSTALL_PREFIX ${DEFAULT_PREFIX} CACHE PATH "default plugin installation path" FORCE)
 endif()
 
-include_directories(SYSTEM ${GIMPUI_INCLUDE_DIRS})
-cuda_add_executable(multi_res_filter multi_res_host.cu gimp_gui.cpp gimp_main.cpp multi_res_cpu.cpp)
+add_executable(multi_res_filter multi_res_host.cu gimp_gui.cpp gimp_main.cpp multi_res_cpu.cpp)
 target_link_libraries(multi_res_filter ${GIMPUI_LIBRARIES})
+target_include_directories(multi_res_filter SYSTEM PRIVATE ${GIMPUI_INCLUDE_DIRS})
 
 install(TARGETS multi_res_filter RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX})
