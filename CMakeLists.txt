@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.4.3)
+cmake_minimum_required(VERSION 3.8.2)
 project(gimp-cuda-plugin LANGUAGES CXX CUDA)
 
 find_package(CUDA REQUIRED)
